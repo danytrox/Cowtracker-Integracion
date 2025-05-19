@@ -21,7 +21,12 @@ export default function RootLayout() {
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <Stack>
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" />
+        <Stack.Screen name="+not-found" options={{ title: 'Página no encontrada' }} />
+        <Stack.Screen name="pages/help" options={{ title: 'Ayuda' }} />
+        <Stack.Screen name="pages/Informe" options={{ title: 'Informe' }} />
+        <Stack.Screen name="pages/production" options={{ title: 'Producción' }} />
+        <Stack.Screen name="pages/Qrcamera" options={{ title: 'Escanear QR' }} />
+        <Stack.Screen name="pages/explore" options={{ title: 'Explorar' }} />
       </Stack>
       <StatusBar style="auto" />
     </ThemeProvider>

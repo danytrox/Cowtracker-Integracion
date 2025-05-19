@@ -1,75 +1,177 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useRouter } from 'expo-router';
+import React, { useEffect } from 'react';
+import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
-import { ThemedText } from '@/components/ThemedText';
-import { ThemedView } from '@/components/ThemedView';
 
-export default function HomeScreen() {
+const HomeScreen = () => {
+  const router = useRouter();
+
+  useEffect(() => {
+    console.log('HomeScreen montado - Mostrando los menús');
+  }, []);
+
+  const menuItems = [
+    {
+      id: 'admin',
+      title: 'Administrador',
+      icon: '👨‍💼',
+      route: '/pages/explore',
+      description: 'Gestionar trabajadores y veterinarios',
+    },
+    {
+      id: 'cattle',
+      title: 'Mi Ganado',
+      icon: '🐄',
+      route: '/pages/explore',
+      description: 'Gestiona todo tu ganado',
+    },
+    {
+      id: 'informe',
+      title: 'Informe',
+      icon: '📖',
+      route: '/pages/Informe',
+      description: 'Generar infomes de ganado',
+    },
+    {
+      id: 'vet',
+      title: 'Datos veterinarios',
+      icon: '💊',
+      route: '/pages/explore',
+      description: 'Datos veterinarios y medicamentos',
+    },
+    {
+      id: 'qr',
+      title: 'Escanear QR',
+      icon: '📷',
+      route: '/(tabs)/Qrcamera',
+      description: 'Escanear códigos QR',
+    },
+    {
+      id: 'production',
+      title: 'Produccion',
+      icon: '🥩',
+      route: '/pages/production',
+      description: 'Gestionar produccion',
+    },
+    {
+      id: 'report',
+      title: 'Reporte',
+      icon: '📝',
+      route: '/pages/report',
+      description: 'Generar reporte',
+    },
+    {
+      id: 'help',
+      title: 'Ayuda',
+      icon: '🆘',
+      route: '/pages/help',
+      description: 'Ayuda y soporte',
+    },
+  ];
+
+  const navigateTo = (route: Parameters<typeof router.push>[0]) => {
+    console.log('Navegando a:', route);
+    router.push(route);
+  };
+
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    <View style={homeStyles.container}>
+      <ScrollView style={homeStyles.menuContainer}>
+        <View style={homeStyles.menuGrid}>
+          {menuItems.map((item) => (
+            <TouchableOpacity
+              key={item.id}
+              style={homeStyles.menuItem}
+               onPress={() => navigateTo(item.route as Parameters<typeof router.push>[0])}
+            >
+              <Text style={homeStyles.menuIcon}>{item.icon}</Text>
+              <Text style={homeStyles.menuTitle}>{item.title}</Text>
+              <Text style={homeStyles.menuDescription}>{item.description}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </ScrollView>
+    </View>
   );
-}
+};
 
-const styles = StyleSheet.create({
-  titleContainer: {
+
+export const homeStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  menuContainer: {
+    flex: 1,
+    padding: 15,
+  },
+  menuGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  menuItem: {
+    
+    width: '48%',
+    padding: 20,
+    borderRadius: 10,
+    marginBottom: 15,
     alignItems: 'center',
-    gap: 8,
   },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
+  menuIcon: {
+    fontSize: 30,
+    marginBottom: 10,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  menuTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+
+    marginBottom: 5,
   },
-});
+  menuDescription: {
+    fontSize: 12,
+
+    textAlign: 'center',
+  },
+  statsContainer: {
+
+    borderRadius: 10,
+    padding: 15,
+    marginBottom: 20,
+
+  },
+  statsTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+
+    marginBottom: 15,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  statItem: {
+    width: '48%',
+
+    padding: 15,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+
+    marginBottom: 5,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: '#666',
+    textAlign: 'center',
+  },
+}); 
+
+
+export default HomeScreen;
