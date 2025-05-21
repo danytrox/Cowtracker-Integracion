@@ -34,7 +34,7 @@ export default function App() {
       setQr(qrData);
       Alert.alert('QR detectado', qrData);
       if (qrData === 'PRUEBA-QR') {
-        router.push('pages/Informe');
+        router.replace('pages/Informe') || router.push('');
       }
     }
   }
