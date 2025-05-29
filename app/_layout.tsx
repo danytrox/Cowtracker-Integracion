@@ -1,37 +1,115 @@
-import AuthProvider from '@/providers/AuthProvider';
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
-import { useFonts } from 'expo-font';
-import { Stack } from 'expo-router';
+import React, { useEffect } from 'react';
+import { Stack, Redirect, useRouter } from 'expo-router';
+import { AuthProvider, useAuth } from '../src/components/AuthContext';
+import { FarmProvider } from '../src/components/FarmContext';
 import { StatusBar } from 'expo-status-bar';
-import 'react-native-reanimated';
+import { Text, View, ActivityIndicator } from 'react-native';
+import CustomHeader from '../src/components/CustomHeader';
 
-import { useColorScheme } from '@/hooks/useColorScheme';
+function RootLayoutNav() {
+  const { currentUser, loading } = useAuth();
+  const router = useRouter();
 
-export default function RootLayout() {
-  const colorScheme = useColorScheme();
-  const [loaded] = useFonts({
-    SpaceMono: require('../assets/fonts/SpaceMono-Regular.ttf'),
-  });
+  useEffect(() => {
+    if (!loading && !currentUser) {
+      
+      router.replace('/login');
+    }
+  }, [currentUser, loading]);
 
-  if (!loaded) {
-    // Async font loading only occurs in development.
-    return null;
+  if (loading) {
+    return (
+      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
+        <ActivityIndicator size="large" color="#27ae60" />
+        <Text style={{ marginTop: 10 }}>Cargando...</Text>
+      </View>
+    );
   }
 
   return (
-    <AuthProvider>
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-      <Stack>
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="+not-found" options={{ title: 'Página no encontrada' }} />
-        <Stack.Screen name="pages/help" options={{ title: 'Ayuda' }} />
-        <Stack.Screen name="pages/Informe" options={{ title: 'Informe' }} />
-        <Stack.Screen name="pages/production" options={{ title: 'Producción' }} />
-        <Stack.Screen name="pages/Qrcamera" options={{ title: 'Escanear QR' }} />
-        <Stack.Screen name="pages/explore" options={{ title: 'Explorar' }} />
+    <>
+      <Stack 
+        screenOptions={{
+          headerShown: false, 
+          headerStyle: {
+            backgroundColor: '#27ae60',
+            elevation: 0,
+            shadowOpacity: 0,
+            borderBottomWidth: 0,
+            height: 70,
+          },
+          headerTitleStyle: {
+            fontWeight: 'bold',
+            color: '#ffffff'
+          },
+        }}
+      >
+        {currentUser ? (
+          <>
+            <Stack.Screen name="index" redirect={true} />
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen 
+              name="cattle-detail" 
+              options={{ 
+                headerShown: true,
+                headerTitle: () => <CustomHeader title="Detalles del Ganado" /> 
+              }} 
+            />
+            <Stack.Screen 
+              name="add-cattle" 
+              options={{ 
+                headerShown: true,
+                headerTitle: () => <CustomHeader title="Gestionar Ganado" /> 
+              }} 
+            />
+            <Stack.Screen 
+              name="profile" 
+              options={{ 
+                headerShown: true,
+                headerTitle: () => <CustomHeader title="Mi Perfil" /> 
+              }} 
+            />
+            <Stack.Screen 
+              name="farms" 
+              options={{ 
+                headerShown: true,
+                headerTitle: () => <CustomHeader title="Mis Granjas" /> 
+              }} 
+            />
+            <Stack.Screen 
+              name="sales" 
+              options={{ 
+                headerShown: true,
+                headerTitle: () => <CustomHeader title="Ventas" /> 
+              }} 
+            />
+            <Stack.Screen 
+              name="report" 
+              options={{ 
+                headerShown: true,
+                headerTitle: () => <CustomHeader title="Informe" /> 
+              }} 
+            />
+          </>
+        ) : (
+          <>
+            <Stack.Screen name="index" redirect={true} />
+            <Stack.Screen name="login" options={{ headerShown: false }} />
+            <Stack.Screen name="register" options={{ headerShown: false }} />
+          </>
+        )}
       </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+      <StatusBar style="dark" />
+    </>
+  );
+}
+
+export default function RootLayout() {
+  return (
+    <AuthProvider>
+      <FarmProvider>
+        <RootLayoutNav />
+      </FarmProvider>
     </AuthProvider>
   );
 }
