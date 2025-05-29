@@ -18,8 +18,8 @@ const ProductionScreen = () => {
           onPress={() => router.push('/(tabs)/cattle-sale')}
         >
           <Text style={productionStyles.buttonIcon}>🐄</Text>
-          <Text style={productionStyles.buttonText}>Registrar Venta de Ganado</Text>
-          <Text style={productionStyles.buttonDescription}>Registra las ventas de ganado realizadas</Text>
+          <Text style={productionStyles.buttonText}>Venta de Ganado</Text>
+          <Text style={productionStyles.buttonDescription}>Ventas de ganado realizadas</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 

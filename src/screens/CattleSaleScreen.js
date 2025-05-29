@@ -41,86 +41,93 @@ const CattleSaleScreen = () => {
     router.back();
   };
 
+  const handleScan = () => {
+    router.push({
+      pathname: 'qr-scanner', // o la ruta real de tu QR
+      params: { from: 'cattle-sale' }
+    });
+  };
+
   return (
-    <ScrollView style={cattleSaleStyles.container}>
-      <View style={cattleSaleStyles.header}>
-        <Text style={cattleSaleStyles.headerText}>Registrar Venta de Ganado</Text>
+    <View style={{ flex: 1 }}>
+      <ScrollView style={cattleSaleStyles.container} contentContainerStyle={{ paddingBottom: 140 }}>
+        <View style={cattleSaleStyles.header}>
+          <Text style={cattleSaleStyles.headerText}>Venta de Ganado</Text>
+        </View>
+
+        <View style={cattleSaleStyles.form}>
+          {/* ...otros campos del formulario... */}
+        </View>
+      </ScrollView>
+
+      <View style={[cattleSaleStyles.buttonContainer, styles.fixedButtons]}>
+        <TouchableOpacity 
+          style={styles.sideButton}
+          onPress={() => router.back()}
+        >
+          <Text style={cattleSaleStyles.cancelButtonText}>Cancelar</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.scanButtonCenter}
+          onPress={handleScan}
+        >
+          <Text style={styles.scanButtonText}>Scanear</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={styles.sideButton}
+          onPress={handleSave}
+        >
+          <Text style={cattleSaleStyles.saveButtonText}>Vender</Text>
+        </TouchableOpacity>
       </View>
-
-      <View style={cattleSaleStyles.form}>
-        <View style={cattleSaleStyles.inputContainer}>
-          <Text style={cattleSaleStyles.label}>Fecha de venta</Text>
-          <TouchableOpacity 
-            style={cattleSaleStyles.dateButton}
-            onPress={() => setShowDatePicker(true)}
-          >
-            <Text style={cattleSaleStyles.dateText}>
-              {formData.date.toLocaleDateString()}
-            </Text>
-            <Ionicons name="calendar" size={24} color="#27ae60" />
-          </TouchableOpacity>
-        </View>
-
-        {showDatePicker && (
-          <DateTimePicker
-            value={formData.date}
-            mode="date"
-            display="default"
-            onChange={handleDateChange}
-          />
-        )}
-
-        <View style={cattleSaleStyles.inputContainer}>
-          <Text style={cattleSaleStyles.label}>Comprador *</Text>
-          <TextInput
-            style={cattleSaleStyles.input}
-            value={formData.customer}
-            onChangeText={(text) => setFormData({ ...formData, customer: text })}
-            placeholder="Nombre del comprador"
-          />
-        </View>
-
-        <View style={cattleSaleStyles.inputContainer}>
-          <Text style={cattleSaleStyles.label}>Monto total *</Text>
-          <TextInput
-            style={cattleSaleStyles.input}
-            value={formData.totalAmount}
-            onChangeText={(text) => setFormData({ ...formData, totalAmount: text })}
-            placeholder="Ingrese el monto total"
-            keyboardType="numeric"
-          />
-        </View>
-
-        <View style={cattleSaleStyles.inputContainer}>
-          <Text style={cattleSaleStyles.label}>Notas</Text>
-          <TextInput
-            style={[cattleSaleStyles.input, cattleSaleStyles.textArea]}
-            value={formData.notes}
-            onChangeText={(text) => setFormData({ ...formData, notes: text })}
-            placeholder="Detalles adicionales de la venta"
-            multiline
-            numberOfLines={4}
-          />
-        </View>
-
-        <View style={cattleSaleStyles.buttonContainer}>
-          <TouchableOpacity 
-            style={cattleSaleStyles.cancelButton}
-            onPress={() => router.back()}
-          >
-            <Text style={cattleSaleStyles.cancelButtonText}>Cancelar</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={cattleSaleStyles.saveButton}
-            onPress={handleSave}
-          >
-            <Text style={cattleSaleStyles.saveButtonText}>Guardar</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    </ScrollView>
+    </View>
   );
+};
+
+const styles = {
+  fixedButtons: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    width: '100%',
+    backgroundColor: '#fff',
+    paddingVertical: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    gap: 12,
+  },
+  sideButton: {
+    flex: 1,
+    marginHorizontal: 8,
+    backgroundColor: '#eee',
+    paddingVertical: 18,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: 120,
+  },
+  scanButtonCenter: {
+    flex: 1.5,
+    marginHorizontal: 8,
+    backgroundColor: '#27ae60',
+    paddingVertical: 18,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    maxWidth: 180,
+  },
+  scanButtonText: {
+    color: '#fff',
+    fontSize: 20,
+    fontWeight: 'bold',
+    letterSpacing: 1,
+  },
 };
 
 export default CattleSaleScreen;
