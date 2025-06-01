@@ -9,11 +9,17 @@ import CustomHeader from '../src/components/CustomHeader';
 function RootLayoutNav() {
   const { currentUser, loading } = useAuth();
   const router = useRouter();
-
   useEffect(() => {
     if (!loading && !currentUser) {
-      
-      router.replace('/login');
+      console.log('No hay usuario activo, redirigiendo a login...');
+      try {
+        // Usar timeout para evitar problemas con el ciclo de rendering
+        setTimeout(() => {
+          router.replace('/login');
+        }, 100);
+      } catch (e) {
+        console.error('Error al redirigir a login:', e);
+      }
     }
   }, [currentUser, loading]);
 
@@ -36,7 +42,7 @@ function RootLayoutNav() {
             elevation: 0,
             shadowOpacity: 0,
             borderBottomWidth: 0,
-            height: 70,
+            height: 70
           },
           headerTitleStyle: {
             fontWeight: 'bold',
@@ -88,6 +94,13 @@ function RootLayoutNav() {
               options={{ 
                 headerShown: true,
                 headerTitle: () => <CustomHeader title="Informe" /> 
+              }} 
+            />
+            <Stack.Screen 
+              name="vinculacion" 
+              options={{ 
+                headerShown: true,
+                headerTitle: () => <CustomHeader title="Vincular a Finca" /> 
               }} 
             />
           </>

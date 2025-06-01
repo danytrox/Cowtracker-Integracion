@@ -1,10 +1,11 @@
 const express = require('express');
 const cors = require('cors');
 require('dotenv').config(); // Cargar variables de entorno
-const { errorHandler } = require('./middleware/errorMiddleware');
 const userRoutes = require('./routes/userRoutes');
 const cattleRoutes = require('./routes/cattleRoutes');
 const farmRoutes = require('./routes/farmRoutes');
+const usuarioFincaRoutes = require('./routes/usuarioFincaRoutes');
+const vinculacionRoutes = require('./routes/vinculacionRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -13,7 +14,7 @@ const PORT = process.env.PORT || 5000;
 console.log('Iniciando servidor con configuración:');
 console.log(`- Puerto: ${PORT}`);
 console.log(`- Entorno: ${process.env.NODE_ENV || 'development'}`);
-console.log(`- Firebase URL: ${process.env.FIREBASE_DATABASE_URL || 'No configurado'}`);
+console.log(`- Supabase URL: ${process.env.EXPO_PUBLIC_SUPABASE_URL || 'No configurado'}`);
 
 // Configuración CORS para permitir conexiones desde el frontend
 app.use(cors({
@@ -34,6 +35,8 @@ app.use((req, res, next) => {
 app.use('/api/users', userRoutes);
 app.use('/api/cattle', cattleRoutes);
 app.use('/api/farms', farmRoutes);
+app.use('/api/usuario-finca', usuarioFincaRoutes);
+app.use('/api/vincular', vinculacionRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'API de CowTracker funcionando correctamente' });
@@ -43,8 +46,6 @@ app.get('/', (req, res) => {
 app.get('/api/test', (req, res) => {
   res.json({ status: 'ok', message: 'Conexión exitosa al backend' });
 });
-
-app.use(errorHandler);
 
 // Escuchar en todas las interfaces de red (0.0.0.0) en lugar de solo localhost
 app.listen(PORT, '0.0.0.0', () => {

@@ -36,9 +36,7 @@ const FarmsScreen = () => {
   const [modalVisible, setModalVisible] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    location: '',
-    size: '',
-    type: ''
+    size: ''
   });
   const [errorMessage, setErrorMessage] = useState('');
   const [editingFarm, setEditingFarm] = useState(null);
@@ -67,24 +65,56 @@ const FarmsScreen = () => {
   useEffect(() => {
     loadFarms();
   }, []);
-
   const loadFarms = async () => {
     try {
       setLoading(true);
       setErrorMessage('');
       
+      console.log('Cargando granjas desde FarmsScreen...');
+      
       // Usar la API en lugar de Firestore directamente
       const response = await api.farms.getAll();
-      setFarms(response);
+      
+      // Validar la respuesta
+      if (!response || !Array.isArray(response)) {
+        console.warn('Respuesta de API inválida:', response);
+        setErrorMessage('Formato de datos inválido');
+        setFarms([]);
+        return;
+      }
+      
+      console.log(`Se han cargado ${response.length} granjas`);
+      
+      // Procesar y validar cada granja
+      const processedFarms = response.map(farm => {
+        const farmId = farm._id || farm.id_finca || farm.id;
+        const farmName = farm.name || farm.nombre;
+        
+        if (!farmId) {
+          console.warn('Granja sin ID encontrada:', farm);
+        }
+        if (!farmName) {
+          console.warn('Granja sin nombre encontrada:', farm);
+        }
+        
+        return {
+          ...farm,
+          _id: farmId || `temp-${Math.random().toString(36).substring(2, 9)}`,
+          name: farmName || 'Granja sin nombre',
+          // Asegurar que tenemos todas las propiedades necesarias
+          size: farm.size || farm.tamano || 0
+        };
+      });
+      
+      setFarms(processedFarms);
     } catch (error) {
       console.error('Error al obtener granjas:', error);
-      setErrorMessage('No se pudieron cargar las granjas');
+      setErrorMessage('No se pudieron cargar las granjas: ' + (error.message || 'Error desconocido'));
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
   };
-
   const handleCreateFarm = async () => {
     try {
       setErrorMessage('');
@@ -93,25 +123,42 @@ const FarmsScreen = () => {
         return;
       }
 
+      // Adaptar datos al formato que espera el backend
       const farmData = {
-        ...formData,
-        type: formData.type || 'general'
+        name: formData.name.trim(), // El backend traducirá esto a nombre
+        nombre: formData.name.trim(), // Agregar también nombre para compatibilidad
+        size: formData.size ? parseInt(formData.size) : 0, // El backend traducirá esto a tamano
+        tamano: formData.size ? parseInt(formData.size) : 0, // Agregar también tamano para compatibilidad
       };
 
+      console.log('Enviando datos de finca:', farmData);
+
+      let response;
       if (editingFarm) {
         // Actualizar granja existente
-        await api.farms.update(editingFarm._id, farmData);
+        console.log(`Actualizando granja con ID: ${editingFarm._id}`);
+        response = await api.farms.update(editingFarm._id, farmData);
+        showModal('Granja actualizada correctamente');
       } else {
         // Crear nueva granja
-        await api.farms.create(farmData);
+        console.log('Creando nueva granja');
+        response = await api.farms.create(farmData);
+        showModal('Granja creada correctamente');
       }
+      
+      console.log('Respuesta de la API:', response);
 
       setModalVisible(false);
       resetForm();
-      loadFarms();
+      // Recargar las granjas después de un breve retraso para dar tiempo a que se actualice el backend
+      setTimeout(() => {
+        loadFarms();
+      }, 500);
     } catch (error) {
       console.error('Error al crear/actualizar granja:', error);
-      setErrorMessage('Error al guardar la granja');
+      const errorMsg = error.message || 'Error al guardar la granja';
+      setErrorMessage(errorMsg);
+      Alert.alert('Error', errorMsg);
     }
   };
 
@@ -143,9 +190,7 @@ const FarmsScreen = () => {
   const resetForm = () => {
     setFormData({
       name: '',
-      location: '',
-      size: '',
-      type: ''
+      size: ''
     });
     setEditingFarm(null);
   };
@@ -154,9 +199,7 @@ const FarmsScreen = () => {
     setEditingFarm(farm);
     setFormData({
       name: farm.name || '',
-      location: farm.location || '',
-      size: farm.size?.toString() || '',
-      type: farm.type || 'general'
+      size: farm.size?.toString() || ''
     });
     setModalVisible(true);
   };
@@ -478,28 +521,12 @@ const FarmsScreen = () => {
               placeholder="Nombre de la granja"
             />
 
-            <Text style={farmsStyles.label}>Ubicación</Text>
-            <TextInput 
-              style={farmsStyles.input}
-              value={formData.location}
-              onChangeText={(text) => setFormData({ ...formData, location: text })}
-              placeholder="Ubicación"
-            />
-
             <Text style={farmsStyles.label}>Tamaño</Text>
             <TextInput 
               style={farmsStyles.input}
               value={formData.size}
               onChangeText={(text) => setFormData({ ...formData, size: text })}
               placeholder="Ej. 150 hectáreas"
-            />
-
-            <Text style={farmsStyles.label}>Tipo</Text>
-            <TextInput 
-              style={farmsStyles.input}
-              value={formData.type}
-              onChangeText={(text) => setFormData({ ...formData, type: text })}
-              placeholder="Tipo de granja"
             />
 
             <View style={farmsStyles.modalButtons}>

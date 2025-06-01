@@ -15,20 +15,27 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { getShadowStyle } from '../utils/styles';
 import { useAuth } from '../components/AuthContext';
+import FarmSelector from '../components/FarmSelector';
 import api from '../services/api';
+import { supabase } from '../config/supabase';
 
-const AddCattleScreen = ({ route }) => {
+const AddCattleScreen = (props) => {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const cattleId = route?.params?.cattleId || params.id;
+  
+  // Manejar diferentes formatos de props para obtener el ID del ganado
+  const route = props?.route || {};
+  const cattleId = route?.params?.cattleId || params?.id || null;
   const isEditMode = !!cattleId;
+  
   const { userInfo } = useAuth();
+  
+  // Estado para el manejo de errores
+  const [errorMessage, setErrorMessage] = useState(null);
 
   // Estados del formulario
   const [identifier, setIdentifier] = useState('');
   const [name, setName] = useState('');
-  const [type, setType] = useState('');
-  const [breed, setBreed] = useState('');
   const [gender, setGender] = useState('');
   const [weight, setWeight] = useState('');
   const [location, setLocation] = useState('');
@@ -37,6 +44,7 @@ const AddCattleScreen = ({ route }) => {
   const [selectedFarmId, setSelectedFarmId] = useState('');
   const [healthStatus, setHealthStatus] = useState('saludable');
   const [status, setStatus] = useState('activo');
+  const [tipoProduccion, setTipoProduccion] = useState('leche');
   
   // Estados para fecha
   const [dateOfBirth, setDateOfBirth] = useState(new Date());
@@ -50,25 +58,129 @@ const AddCattleScreen = ({ route }) => {
   const [farms, setFarms] = useState([]);
   const [loadingFarms, setLoadingFarms] = useState(false);
   const [loadingCattle, setLoadingCattle] = useState(isEditMode);
-  
-  // Cargar granjas
-  useEffect(() => {
-    const loadFarms = async () => {
-      try {
-        setLoadingFarms(true);
-        if (userInfo && userInfo.uid) {
-          // Usar la API para obtener las granjas
-          const userFarms = await api.farms.getAll();
-          setFarms(userFarms);
-        }
-      } catch (error) {
-        console.error('Error al cargar granjas:', error);
-        Alert.alert('Error', 'No se pudieron cargar las granjas disponibles');
-      } finally {
-        setLoadingFarms(false);
+    // Datos de granja de prueba para asegurar que siempre haya al menos una granja disponible
+  const testFarms = [
+    { _id: 'test-farm-1', id_finca: 'test-farm-1', name: 'Granja de Prueba 1', nombre: 'Granja de Prueba 1' },
+    { _id: 'test-farm-2', id_finca: 'test-farm-2', name: 'Granja de Prueba 2', nombre: 'Granja de Prueba 2' }
+  ];
+  // Función para cargar granjas de manera segura
+  const loadFarms = async () => {
+    try {
+      setLoadingFarms(true);
+      
+      // Asegurar que haya datos disponibles en caso de fallo
+      let defaultFarms = [
+        { _id: 'default-farm-1', id_finca: 'default-farm-1', name: 'Granja por defecto', nombre: 'Granja por defecto' }
+      ];
+      
+      // Verificar si el usuario está autenticado
+      if (!userInfo || !userInfo.uid) {
+        console.warn('No hay información de usuario disponible');
+        setFarms(defaultFarms);
+        return;
       }
-    };
-    
+      
+      console.log('Cargando granjas para el usuario:', userInfo.uid);
+      
+      try {
+        // Intenta obtener las granjas a través de la API
+        const userFarms = await api.farms.getAll();
+        console.log('Respuesta de la API (farms.getAll):', userFarms);
+        
+        let finalFarms = [];
+        
+        // Verificar y procesar los datos recibidos
+        if (userFarms && Array.isArray(userFarms)) {
+          // Filtrar para remover elementos nulos o indefinidos
+          const validFarms = userFarms.filter(farm => farm !== null && farm !== undefined);
+          
+          if (validFarms.length > 0) {
+            // Procesar y normalizar los datos de las granjas
+            finalFarms = validFarms.map((farm, index) => {
+              const farmId = farm._id || farm.id_finca || `api-farm-${index}`;
+              const farmName = farm.name || farm.nombre || `Granja ${index+1}`;
+              
+              return {
+                ...farm,
+                _id: farmId,
+                id_finca: farmId,
+                name: farmName,
+                nombre: farmName
+              };
+            });
+            
+            console.log(`Se procesaron ${finalFarms.length} granjas válidas`);
+          } else {
+            console.warn('La API devolvió un array vacío o sin elementos válidos');
+          }
+        } else if (userFarms && typeof userFarms === 'object') {
+          // Si es un objeto pero no un array, puede ser un objeto de datos
+          console.log('La API devolvió un objeto, intentando procesarlo...');
+          
+          // Extraer propiedades que podrían contener un array de granjas
+          const possibleArrays = ['data', 'farms', 'items', 'results'];
+          
+          for (const key of possibleArrays) {
+            if (userFarms[key] && Array.isArray(userFarms[key])) {
+              console.log(`Encontrado array de granjas en propiedad: ${key}`);
+              finalFarms = userFarms[key].map((farm, index) => ({
+                ...farm,
+                _id: farm._id || farm.id_finca || `api-farm-${index}`,
+                name: farm.name || farm.nombre || `Granja ${index+1}`
+              }));
+              break;
+            }
+          }
+          
+          // Si no encontramos un array en ninguna propiedad común, tratar todo el objeto como una granja
+          if (finalFarms.length === 0 && (userFarms._id || userFarms.id_finca || userFarms.name || userFarms.nombre)) {
+            console.log('Procesando el objeto completo como una única granja');
+            finalFarms = [{
+              ...userFarms,
+              _id: userFarms._id || userFarms.id_finca || 'single-farm',
+              name: userFarms.name || userFarms.nombre || 'Granja Única'
+            }];
+          }
+        } else {
+          console.warn('La API devolvió un formato de datos no reconocido:', userFarms);
+        }
+        
+        // Si después de todo el procesamiento no tenemos granjas, usar las predeterminadas
+        if (!finalFarms || finalFarms.length === 0) {
+          console.log('No se pudieron procesar granjas válidas, usando granjas por defecto');
+          finalFarms = defaultFarms;
+        }
+        
+        // Agregar las granjas de prueba en entorno de desarrollo
+        if (process.env.NODE_ENV !== 'production' && Array.isArray(testFarms)) {
+          console.log('Agregando granjas de prueba en entorno de desarrollo');
+          finalFarms = [...finalFarms, ...testFarms];
+        }
+        
+        console.log(`Total granjas disponibles: ${finalFarms.length}`);
+        setFarms(finalFarms);
+        
+        // Si hay granjas disponibles, establecer la primera como seleccionada
+        if (finalFarms.length > 0 && !selectedFarmId) {
+          setSelectedFarmId(finalFarms[0]._id);
+        }
+        
+      } catch (apiError) {
+        console.error('Error en la llamada API a getAll():', apiError);
+        setFarms(defaultFarms);
+      }
+    } catch (error) {
+      console.error('Error general al cargar granjas:', error);
+      setFarms([
+        { _id: 'error-farm', id_finca: 'error-farm', name: 'Granja (error recuperado)', nombre: 'Granja (error recuperado)' }
+      ]);
+    } finally {
+      setLoadingFarms(false);
+    }
+  };
+  
+  // Cargar granjas cuando se inicia el componente
+  useEffect(() => {
     if (userInfo) {
       loadFarms();
     }
@@ -92,14 +204,13 @@ const AddCattleScreen = ({ route }) => {
           // Establecer todos los valores del formulario desde los datos del ganado
           setIdentifier(cattleData.identificationNumber || '');
           setName(cattleData.name || '');
-          setType(cattleData.type || '');
-          setBreed(cattleData.breed || '');
           setGender(cattleData.gender || '');
           setWeight(cattleData.weight ? cattleData.weight.toString() : '');
           setNotes(cattleData.notes || '');
           setPurchasePrice(cattleData.purchasePrice ? cattleData.purchasePrice.toString() : '');
           setStatus(cattleData.status || 'activo');
           setHealthStatus(cattleData.healthStatus || 'saludable');
+          setTipoProduccion(cattleData.tipoProduccion || 'leche');
           
           // Establecer fecha de nacimiento
           if (cattleData.birthDate) {
@@ -179,75 +290,106 @@ const AddCattleScreen = ({ route }) => {
     loadCattleData();
   }, [cattleId, isEditMode]);
 
-  const handleCancel = () => {
-    router.back();
+  // Función para manejar errores de manera consistente
+  const handleError = (error, customMessage = 'Se produjo un error') => {
+    console.error(customMessage, error);
+    setErrorMessage(customMessage);
+    
+    // Mostrar mensaje en UI
+    Alert.alert('Error', 
+      `${customMessage}. ${error?.message || 'Por favor intenta nuevamente.'}`,
+      [{ text: 'OK' }]
+    );
   };
 
-  const handleSave = async () => {
-    // Validaciones
-    if (!identifier || !name || !type || !breed) {
-      Alert.alert('Error', 'Por favor, completa los campos obligatorios');
-      return;
-    }
-
+  const handleCancel = () => {
     try {
-      if (!userInfo || !userInfo.uid) {
-        Alert.alert('Error', 'No se pudo obtener la información del usuario');
+      // Intentar diferentes métodos de navegación según disponibilidad
+      if (typeof router.back === 'function') {
+        router.back();
+      } else if (typeof router.navigate === 'function') {
+        router.navigate('/(tabs)');
+      } else {
+        // Intento alternativo para web
+        router.push('/(tabs)');
+      }
+    } catch (navError) {
+      console.error('Error durante la navegación en handleCancel:', navError);
+      try {
+        // Último intento
+        router.push('/');
+      } catch (e) {
+        console.error('No se pudo navegar:', e);
+      }
+    }
+  };
+  const handleSave = async () => {
+    try {
+      // Validaciones con mensajes específicos
+      if (!identifier) {
+        Alert.alert('Campo requerido', 'Por favor, ingresa un número de identificación para el ganado');
         return;
       }
       
-      // Validar y analizar fechas de texto si es necesario
-      let birthDateToSave = dateOfBirth;
-      let purchaseDateToSave = purchaseDate;
-      
-      if (dateOfBirthText) {
-        const parsedBirthDate = parseDate(dateOfBirthText);
-        if (parsedBirthDate && !isNaN(parsedBirthDate.getTime())) {
-          birthDateToSave = parsedBirthDate;
-        }
+      if (!name) {
+        Alert.alert('Campo requerido', 'Por favor, ingresa un nombre para el ganado');
+        return;
       }
       
-      if (purchaseDateText) {
-        const parsedPurchaseDate = parseDate(purchaseDateText);
-        if (parsedPurchaseDate && !isNaN(parsedPurchaseDate.getTime())) {
-          purchaseDateToSave = parsedPurchaseDate;
-        }
+      if (!selectedFarmId) {
+        Alert.alert('Granja requerida', 'Por favor, selecciona una granja para asignar el ganado');
+        return;
       }
-      
-      const cattleData = {
-        identificationNumber: identifier,
-        name,
-        type,
-        breed,
-        gender,
-        weight: parseFloat(weight) || 0,
-        location: {
-          area: location || '',
-          farm: selectedFarmId
-        },
-        notes,
-        purchasePrice: parseFloat(purchasePrice) || 0,
-        birthDate: birthDateToSave,
-        purchaseDate: purchaseDateToSave,
-        status: status || 'activo',
-        healthStatus: healthStatus || 'saludable',
-        owner: userInfo.uid,
-        farmId: selectedFarmId
-      };
-      
-      if (isEditMode) {
-        // Actualizar ganado existente usando la API
-        await api.cattle.update(cattleId, cattleData);
-      } else {
-        // Crear nuevo ganado usando la API
-        await api.cattle.create(cattleData);
+
+      // Verificar que el usuario esté autenticado
+      if (!userInfo || !userInfo.uid) {
+        Alert.alert('Error de sesión', 'No se pudo obtener la información del usuario. Por favor, inicia sesión nuevamente.');
+        return;
       }
-      
-      Alert.alert(
-        isEditMode ? 'Ganado Actualizado' : 'Ganado Agregado',
-        isEditMode ? 'Los datos se han actualizado correctamente.' : 'El ganado se ha agregado correctamente.',
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
+
+      try {
+        // Primero crear la información veterinaria
+        const { data: infoVetData, error: infoVetError } = await supabase
+          .from('informacion_veterinaria')
+          .insert({
+            fecha_tratamiento: new Date().toISOString(),
+            diagnostico: healthStatus === 'Enfermo' ? 'Requiere revisión' : 'Sin diagnóstico',
+            tratamiento: '',
+            nota: notes || ''
+          })
+          .select()
+          .single();
+
+        if (infoVetError) throw infoVetError;
+
+        // Crear estructura de datos para el ganado
+        const cattleData = {
+          nombre: name,
+          numero_identificacion: parseInt(identifier),
+          precio_compra: parseFloat(purchasePrice) || 0,
+          nota: notes || '',
+          id_finca: selectedFarmId,
+          id_estado_salud: healthStatus === 'Saludable' ? 1 : (healthStatus === 'Enfermo' ? 2 : 3),
+          id_genero: gender === 'Macho' ? 1 : 2,
+          id_informacion_veterinaria: infoVetData.id_informacion_veterinaria,
+          id_produccion: tipoProduccion === 'leche' ? 1 : 2
+        };
+        
+        // Insertar en la tabla ganado
+        const { data, error } = await supabase
+          .from('ganado')
+          .insert([cattleData])
+          .select();
+
+        if (error) throw error;
+
+        // Si la inserción fue exitosa, mostrar mensaje y navegar
+        Alert.alert('Éxito', 'Ganado registrado correctamente');
+        router.back();
+      } catch (supabaseError) {
+        console.error('Error al registrar ganado:', supabaseError.message);
+        Alert.alert('Error', 'No se pudo registrar el ganado. Por favor, intente nuevamente.');
+      }
     } catch (error) {
       console.error('Error al guardar ganado:', error);
       Alert.alert('Error', 'No se pudo guardar el ganado. Inténtalo de nuevo.');
@@ -322,12 +464,13 @@ const AddCattleScreen = ({ route }) => {
       <View style={styles.formContainer}>
         <Text style={styles.sectionTitle}>Información básica</Text>
 
-        <Text style={styles.label}>Identificador *</Text>
+        <Text style={styles.label}>Número de Identificación *</Text>
         <TextInput
           style={styles.input}
           value={identifier}
           onChangeText={setIdentifier}
-          placeholder="Ej. BOV-2023-001"
+          placeholder="Número de identificación"
+          keyboardType="numeric"
         />
 
         <Text style={styles.label}>Nombre *</Text>
@@ -338,141 +481,59 @@ const AddCattleScreen = ({ route }) => {
           placeholder="Nombre del animal"
         />
 
-        <Text style={styles.label}>Tipo *</Text>
-        <TextInput
-          style={styles.input}
-          value={type}
-          onChangeText={setType}
-          placeholder="Ej. Vaca, Toro, Novillo"
-        />
-
-        <Text style={styles.label}>Raza *</Text>
-        <TextInput
-          style={styles.input}
-          value={breed}
-          onChangeText={setBreed}
-          placeholder="Ej. Holstein, Jersey, Angus"
-        />
-
         <Text style={styles.label}>Género</Text>
-        <TextInput
-          style={styles.input}
-          value={gender}
-          onChangeText={setGender}
-          placeholder="Ej. Macho, Hembra"
-        />
-
-        <Text style={styles.label}>Fecha de nacimiento</Text>
-        <View style={styles.dateInputContainer}>
-          <TextInput
-            style={styles.dateInput}
-            value={dateOfBirthText}
-            onChangeText={setDateOfBirthText}
-            placeholder="DD/MM/AAAA"
-            keyboardType="numbers-and-punctuation"
-          />
-          <TouchableOpacity 
-            style={styles.calendarButton}
-            onPress={() => setShowDateOfBirthPicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={24} color="#27ae60" />
-          </TouchableOpacity>
-        </View>
-        
-        {showDateOfBirthPicker && (
-          <DateTimePicker
-            value={dateOfBirth}
-            mode="date"
-            display="default"
-            onChange={onChangeDateOfBirth}
-          />
-        )}
-
-        <Text style={styles.label}>Peso (kg)</Text>
-        <TextInput
-          style={styles.input}
-          value={weight}
-          onChangeText={setWeight}
-          placeholder="Peso en kilogramos"
-          keyboardType="numeric"
-        />
-
-        <Text style={styles.label}>Ubicación</Text>
-        <TextInput
-          style={styles.input}
-          value={location}
-          onChangeText={setLocation}
-          placeholder="Ej. Potrero Norte, Establo 2"
-        />
-
-        <Text style={styles.sectionTitle}>Estado y Salud</Text>
-        
-        <Text style={styles.label}>Estado</Text>
         <View style={styles.optionsContainer}>
-          {['activo', 'vendido', 'fallecido'].map(option => (
+          {['Macho', 'Hembra'].map(option => (
             <TouchableOpacity
               key={option}
-              style={[styles.optionButton, status === option && styles.selectedOption]}
-              onPress={() => setStatus(option)}
+              style={[styles.optionButton, gender === option && styles.selectedOption]}
+              onPress={() => setGender(option)}
             >
-              <Text style={[styles.optionText, status === option && styles.selectedOptionText]}>
-                {option.charAt(0).toUpperCase() + option.slice(1)}
+              <Text style={[styles.optionText, gender === option && styles.selectedOptionText]}>
+                {option}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
-        
+
         <Text style={styles.label}>Estado de Salud</Text>
         <View style={styles.optionsContainer}>
-          {['saludable', 'enfermo', 'en tratamiento', 'en cuarentena'].map(option => (
+          {['Saludable', 'Enfermo', 'En tratamiento'].map(option => (
             <TouchableOpacity
               key={option}
               style={[styles.optionButton, healthStatus === option && styles.selectedOption]}
               onPress={() => setHealthStatus(option)}
             >
               <Text style={[styles.optionText, healthStatus === option && styles.selectedOptionText]}>
-                {option.charAt(0).toUpperCase() + option.slice(1)}
+                {option}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
-
-        <Text style={styles.sectionTitle}>Información económica</Text>
-
-        <Text style={styles.label}>Fecha de compra</Text>
-        <View style={styles.dateInputContainer}>
-          <TextInput
-            style={styles.dateInput}
-            value={purchaseDateText}
-            onChangeText={setPurchaseDateText}
-            placeholder="DD/MM/AAAA"
-            keyboardType="numbers-and-punctuation"
-          />
-          <TouchableOpacity 
-            style={styles.calendarButton}
-            onPress={() => setShowPurchaseDatePicker(true)}
-          >
-            <Ionicons name="calendar-outline" size={24} color="#27ae60" />
-          </TouchableOpacity>
-        </View>
-
-        {showPurchaseDatePicker && (
-          <DateTimePicker
-            value={purchaseDate}
-            mode="date"
-            display="default"
-            onChange={onChangePurchaseDate}
-          />
-        )}
 
         <Text style={styles.label}>Precio de compra</Text>
         <TextInput
           style={styles.input}
           value={purchasePrice}
           onChangeText={setPurchasePrice}
-          placeholder="Ej. 1200"
+          placeholder="Precio de compra"
           keyboardType="numeric"
         />
+
+        <Text style={styles.label}>Tipo de Producción</Text>
+        <View style={styles.optionsContainer}>
+          {['Leche', 'Carne'].map(option => (
+            <TouchableOpacity
+              key={option}
+              style={[styles.optionButton, tipoProduccion === option.toLowerCase() && styles.selectedOption]}
+              onPress={() => setTipoProduccion(option.toLowerCase())}
+            >
+              <Text style={[styles.optionText, tipoProduccion === option.toLowerCase() && styles.selectedOptionText]}>
+                {option}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
 
         <Text style={styles.label}>Notas</Text>
         <TextInput
@@ -488,23 +549,64 @@ const AddCattleScreen = ({ route }) => {
         <Text style={styles.sectionTitle}>Asignación a Granja</Text>
         <Text style={styles.label}>Granja *</Text>
         {loadingFarms ? (
-          <ActivityIndicator size="small" color="#27ae60" style={{marginVertical: 10}} />
-        ) : farms.length > 0 ? (
-          <View style={styles.farmSelector}>
-            {farms.map(farm => (
-              <TouchableOpacity
-                key={farm._id}
-                style={[styles.farmOption, selectedFarmId === farm._id && styles.selectedFarmOption]}
-                onPress={() => setSelectedFarmId(farm._id)}
-              >
-                <Text style={[styles.farmOptionText, selectedFarmId === farm._id && styles.selectedFarmOptionText]}>
-                  {farm.name}
-                </Text>
-              </TouchableOpacity>
-            ))}
+          <View style={{padding: 15, alignItems: 'center'}}>
+            <ActivityIndicator size="small" color="#27ae60" style={{marginBottom: 10}} />
+            <Text style={{color: '#666'}}>Cargando granjas disponibles...</Text>
           </View>
         ) : (
-          <Text style={styles.noFarmsText}>No hay granjas disponibles. Por favor, crea una granja primero.</Text>
+          <View style={styles.farmSelector}>
+            {farms && farms.length > 0 ? (
+              <View>
+                <Text style={{marginBottom: 12, color: '#444', fontWeight: '500'}}>
+                  Selecciona una granja ({farms.length} disponibles):
+                </Text>
+                {farms.map((farm, index) => {
+                  if (!farm) return null;
+                  
+                  const farmId = farm.id_finca || `farm-${index}`;
+                  const farmName = farm.nombre || `Granja ${index+1}`;
+                  
+                  return (
+                    <TouchableOpacity
+                      key={farmId}
+                      style={[
+                        styles.farmOption, 
+                        selectedFarmId === farmId && styles.selectedFarmOption
+                      ]}
+                      onPress={() => setSelectedFarmId(farmId)}
+                    >
+                      <Text style={[styles.farmOptionText, selectedFarmId === farmId && styles.selectedFarmOptionText]}>
+                        {farmName}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                
+                {selectedFarmId === '' && (
+                  <Text style={{marginTop: 8, color: '#e74c3c', fontSize: 13}}>
+                    Por favor, selecciona una granja para continuar
+                  </Text>
+                )}
+              </View>
+            ) : (
+              <View>
+                <Text style={styles.noFarmsText}>No hay granjas disponibles. Por favor, crea una granja primero.</Text>
+                <TouchableOpacity
+                  style={styles.createFarmButton}
+                  onPress={() => {
+                    try {
+                      router.push('/(tabs)/farms');
+                    } catch (e) {
+                      console.error('Error al navegar a granjas:', e);
+                      Alert.alert('Error', 'No se pudo navegar a la pantalla de granjas');
+                    }
+                  }}
+                >
+                  <Text style={styles.createFarmButtonText}>Crear Granja</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </View>
         )}
 
         <View style={styles.buttonContainer}>

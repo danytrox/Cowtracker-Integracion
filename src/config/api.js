@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from './supabase';
 import { PROD_API_URL, isProd, LOCAL_IP } from './env';
 
 let API_URL;
@@ -35,11 +35,27 @@ const api = axios.create({
   },
 });
 
+// Función segura para obtener el token de Supabase
+const getSupabaseToken = async () => {
+  try {
+    const { data } = await supabase.auth.getSession();
+    return data?.session?.access_token || null;
+  } catch (error) {
+    console.error('Error al obtener token de Supabase:', error);
+    return null;
+  }
+};
+
+// Interceptor que agrega el token de forma segura
 api.interceptors.request.use(
   async (config) => {
-    const token = await AsyncStorage.getItem('userToken');
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
+    try {
+      const token = await getSupabaseToken();
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    } catch (error) {
+      console.error('Error en interceptor de API:', error);
     }
     return config;
   },

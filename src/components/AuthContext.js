@@ -1,8 +1,8 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
 import { Alert, Platform } from 'react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import api from '../services/api';
+import { supabase } from '../config/supabase';
 
 const AuthContext = createContext();
 
@@ -16,43 +16,101 @@ export const AuthProvider = ({ children }) => {
   const isWeb = Platform.OS === 'web';
   const router = useRouter();
 
-  useEffect(() => {
-    const loadSavedUser = async () => {
-      try {
-        setLoading(true);
-        const savedUserToken = await AsyncStorage.getItem('@user_token');
-        const savedUserInfo = await AsyncStorage.getItem('@user_info');
+  // Función segura para verificar y cargar la sesión de usuario
+  const loadUserSession = async () => {
+    try {
+      setLoading(true);
+
+      // Comprobar si hay una sesión activa en Supabase
+      const { data, error } = await supabase.auth.getSession();
+      
+      if (error) {
+        console.error('Error al obtener sesión de Supabase:', error);
+        return;
+      }
+      
+      if (data?.session) {
+        // Hay una sesión activa, obtener los datos del usuario desde la API
+        const token = data.session.access_token;
+        api.setAuthToken(token);
         
-        if (savedUserToken && savedUserInfo) {
-          const userInfoObj = JSON.parse(savedUserInfo);
-          setUserInfo(userInfoObj);
-          setCurrentUser(userInfoObj);
-          api.setAuthToken(savedUserToken);
+        try {
+          const profile = await api.users.getProfile();
+          // Asegurarse de que el token esté incluido en userInfo
+          const userInfoWithToken = {
+            ...profile,
+            token: token
+          };
+          setUserInfo(userInfoWithToken);
+          setCurrentUser(userInfoWithToken);
+        } catch (profileError) {
+          console.error('Error al obtener perfil de usuario:', profileError);
           
-          // Verificar si el token es válido consultando el perfil del usuario
+          // Intentar cerrar sesión en Supabase en caso de error
           try {
-            const profile = await api.users.getProfile();
-            setUserInfo(profile);
-            setCurrentUser(profile);
-          } catch (profileError) {
-            console.error('Error al validar token guardado:', profileError);
-            
-            // Si hay error, limpiar datos guardados
-            await AsyncStorage.removeItem('@user_token');
-            await AsyncStorage.removeItem('@user_info');
+            await supabase.auth.signOut();
+          } catch (signOutError) {
+            console.error('Error al cerrar sesión después de fallo:', signOutError);
+          }
+          
+          api.clearAuthToken();
+          setCurrentUser(null);
+          setUserInfo(null);
+        }
+      }
+    } catch (error) {
+      console.error('Error al cargar usuario guardado:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Verifica si la sesión de Supabase está activa al cargar la aplicación
+  useEffect(() => {
+    loadUserSession();
+
+    // Suscribirse a cambios en la sesión de autenticación de manera segura
+    let authSubscription = null;
+    try {
+      const { data } = supabase.auth.onAuthStateChange(
+        async (event, session) => {
+          if (session) {
+            const token = session.access_token;
+            api.setAuthToken(token);
+            try {
+              const profile = await api.users.getProfile();
+              // Asegurarse de que el token esté incluido en userInfo
+              const userInfoWithToken = {
+                ...profile,
+                token: token
+              };
+              setUserInfo(userInfoWithToken);
+              setCurrentUser(userInfoWithToken);
+            } catch (error) {
+              console.error('Error al obtener perfil de usuario:', error);
+            }
+          } else {
+            api.clearAuthToken();
             setCurrentUser(null);
             setUserInfo(null);
-            api.clearAuthToken();
           }
         }
-      } catch (error) {
-        console.error('Error al cargar usuario guardado:', error);
-      } finally {
-        setLoading(false);
+      );
+      
+      authSubscription = data.subscription;
+    } catch (error) {
+      console.error('Error al suscribirse a cambios de autenticación:', error);
+    }
+
+    return () => {
+      if (authSubscription) {
+        try {
+          authSubscription.unsubscribe();
+        } catch (error) {
+          console.error('Error al cancelar suscripción:', error);
+        }
       }
     };
-    
-    loadSavedUser();
   }, []);
 
   const register = async (userData) => {
@@ -121,17 +179,35 @@ export const AuthProvider = ({ children }) => {
       setLoading(true);
       setError(null);
       
+      // Iniciar sesión con Supabase primero
+      const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
+      
+      if (authError) throw authError;
+      
+      // Obtener token de la sesión de Supabase
+      const token = authData.session.access_token;
+      
+      // Configurar el token en la API
+      api.setAuthToken(token);
+      
+      // Obtener el perfil completo del usuario desde nuestra API
       const response = await api.users.login({ email, password });
       
-      setUserInfo(response);
-      setCurrentUser(response);
+      // Asegurarse de que el token esté incluido en userInfo
+      const userInfoWithToken = {
+        ...response,
+        token: token // Añadir explícitamente el token
+      };
       
-      await AsyncStorage.setItem('@user_token', response.token);
-      await AsyncStorage.setItem('@user_info', JSON.stringify(response));
+      console.log('AuthContext - Usuario autenticado con token:', token.substring(0, 15) + '...');
       
-      api.setAuthToken(response.token);
+      setUserInfo(userInfoWithToken);
+      setCurrentUser(userInfoWithToken);
       
-      return response;
+      return userInfoWithToken;
     } catch (error) {
       console.error('Error de inicio de sesión:', error);
       
@@ -151,14 +227,15 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       
-      await api.users.logout();
+      // Cerrar sesión en Supabase
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
       
-      await AsyncStorage.removeItem('@user_token');
-      await AsyncStorage.removeItem('@user_info');
-      
+      // Limpiar el estado local
       setCurrentUser(null);
       setUserInfo(null);
       
+      // Limpiar el token de la API
       api.clearAuthToken();
     } catch (error) {
       console.error('Error al cerrar sesión:', error);
@@ -170,11 +247,13 @@ export const AuthProvider = ({ children }) => {
   };
 
   const hasRole = (role) => {
-    if (!userInfo || !userInfo.role) return false;
+    if (!userInfo || !userInfo.rol) return false;
     
-    if (userInfo.role === 'admin') return true;
+    // Manejar admin: el admin puede hacer todo
+    if (userInfo.rol.nombre_rol === 'admin') return true;
     
-    return userInfo.role === role;
+    // Comprobar rol específico
+    return userInfo.rol.nombre_rol === role;
   };
 
   const updateUserProfile = async (data) => {
@@ -187,7 +266,23 @@ export const AuthProvider = ({ children }) => {
       setUserInfo(updatedUser);
       setCurrentUser(updatedUser);
       
-      await AsyncStorage.setItem('@user_info', JSON.stringify(updatedUser));
+      // Si se actualiza el email, actualizarlo también en Supabase
+      if (data.email && data.email !== userInfo.email) {
+        const { error } = await supabase.auth.updateUser({
+          email: data.email
+        });
+        
+        if (error) throw error;
+      }
+      
+      // Si se actualiza la contraseña, actualizarla también en Supabase
+      if (data.password) {
+        const { error } = await supabase.auth.updateUser({
+          password: data.password
+        });
+        
+        if (error) throw error;
+      }
       
       return updatedUser;
     } catch (error) {
@@ -209,9 +304,9 @@ export const AuthProvider = ({ children }) => {
     logout,
     updateProfile: updateUserProfile,
     hasRole,
-    isAdmin: () => hasRole('admin'),
-    isTrabajador: () => hasRole('trabajador'),
-    isVeterinario: () => hasRole('veterinario'),
+    isAdmin: () => userInfo?.id_rol === 1 || userInfo?.rol?.nombre_rol === 'admin',
+    isTrabajador: () => userInfo?.id_rol === 2 || userInfo?.rol?.nombre_rol === 'user',
+    isVeterinario: () => userInfo?.id_rol === 3 || userInfo?.rol?.nombre_rol === 'veterinario',
   };
 
   return (

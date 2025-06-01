@@ -1,6 +1,7 @@
 const asyncHandler = require('express-async-handler');
-const firebaseUserModel = require('../models/firebaseUserModel');
-const authService = require('../services/authService');
+const supabaseUserModel = require('../models/supabaseUserModel');
+const authService = require('../services/supabaseAuthService');
+const { supabase } = require('../config/supabase');
 
 const registerUser = asyncHandler(async (req, res) => {
   // Depurar los datos recibidos completos
@@ -97,29 +98,42 @@ const registerUser = asyncHandler(async (req, res) => {
       throw new Error('Por favor ingrese todos los campos requeridos');
     }
     
-    const user = await authService.registerUser(userData);
-    
-    console.log('Usuario creado con éxito:', {
-      uid: user.uid,
-      email: user.email,
-      role: user.role
-    });
+    try {
+      const user = await authService.registerUser(userData);
+      
+      console.log('Usuario creado con éxito:', {
+        uid: user.uid,
+        email: user.email,
+        role: user.role
+      });
 
-    const userResponse = {
-      uid: user.uid,
-      email: user.email,
-      role: user.role,
-      primer_nombre: user.primer_nombre || '',
-      segundo_nombre: user.segundo_nombre || '',
-      primer_apellido: user.primer_apellido || '',
-      segundo_apellido: user.segundo_apellido || '',
-      id_usuario: user.uid,
-      name: user.name || `${user.primer_nombre} ${user.primer_apellido}`,
-      token: user.token
-    };
+      const userResponse = {
+        uid: user.uid,
+        email: user.email,
+        role: user.role,
+        primer_nombre: user.primer_nombre || '',
+        segundo_nombre: user.segundo_nombre || '',
+        primer_apellido: user.primer_apellido || '',
+        segundo_apellido: user.segundo_apellido || '',
+        id_usuario: user.uid,
+        name: user.name || `${user.primer_nombre} ${user.primer_apellido}`,
+        token: user.token
+      };
 
-    console.log('Enviando respuesta de registro:', userResponse);
-    res.status(201).json(userResponse);
+      console.log('Enviando respuesta de registro:', userResponse);
+      res.status(201).json(userResponse);
+    } catch (error) {
+      console.error('Error en authService.registerUser:', error);
+      
+      // Detectar y manejar errores específicos de Supabase
+      if (error.code === 'PGRST204' || error.message?.includes('created_at')) {
+        console.error('Error de estructura de la base de datos. Es posible que falten columnas en la tabla.');
+        res.status(500);
+        throw new Error('Error en la configuración del servidor. Por favor contacte al administrador.');
+      }
+      
+      throw error; // Propagar otros errores
+    }
   } catch (error) {
     console.error('Error al registrar usuario:', error);
     
@@ -132,9 +146,13 @@ const registerUser = asyncHandler(async (req, res) => {
     } else if (error.code === 'auth/weak-password') {
       res.status(400);
       throw new Error('La contraseña es demasiado débil');
+    } else if (error.message) {
+      // Si ya tiene un mensaje de error específico, lo usamos
+      res.status(res.statusCode === 200 ? 500 : res.statusCode);
+      throw new Error(error.message);
     } else {
       res.status(500);
-      throw new Error('Error al registrar usuario: ' + error.message);
+      throw new Error('Error al registrar usuario. Por favor intente de nuevo más tarde.');
     }
   }
 });
@@ -175,20 +193,37 @@ const loginUser = asyncHandler(async (req, res) => {
 
 const getUserProfile = asyncHandler(async (req, res) => {
   try {
-    const user = await firebaseUserModel.getUserById(req.user.uid);
+    const user = await supabaseUserModel.getUserById(req.user.uid);
     
     if (user) {
+      // Obtener email desde la tabla autentificar
+      const { data: authData, error: authError } = await supabase
+        .from('autentificar')
+        .select('correo')
+        .eq('id_autentificar', req.user.uid)
+        .single();
+      
+      if (authError) {
+        console.error('Error al obtener datos de autentificación:', authError);
+      }
+      
+      // Determinar rol del usuario
+      let role = 'user';
+      if (user.rol && user.rol.id_rol) {
+        if (user.rol.id_rol === 1) role = 'admin';
+        else if (user.rol.id_rol === 3) role = 'veterinario';
+      }
+      
       res.json({
-        uid: user.uid,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        phone: user.phone || '',
+        uid: user.id_autentificar,
+        name: `${user.primer_nombre} ${user.primer_apellido}`,
+        email: authData ? authData.correo : '',
+        role: role,
         primer_nombre: user.primer_nombre || '',
         segundo_nombre: user.segundo_nombre || '',
         primer_apellido: user.primer_apellido || '',
         segundo_apellido: user.segundo_apellido || '',
-        id_usuario: user.uid
+        id_usuario: user.id_usuario
       });
     } else {
       res.status(404);
@@ -203,14 +238,13 @@ const getUserProfile = asyncHandler(async (req, res) => {
 const updateUserProfile = asyncHandler(async (req, res) => {
   try {
     const { 
-      name, email, password, phone,
+      name, email, password,
       primer_nombre, segundo_nombre, primer_apellido, segundo_apellido 
     } = req.body;
     
     const updateData = {};
     if (email) updateData.email = email;
     if (password) updateData.password = password;
-    if (phone !== undefined) updateData.phone = phone;
     
     if (primer_nombre || primer_apellido) {
       updateData.primer_nombre = primer_nombre;
@@ -221,18 +255,24 @@ const updateUserProfile = asyncHandler(async (req, res) => {
       updateData.name = name;
     }
     
-    const updatedUser = await firebaseUserModel.updateUser(req.user.uid, updateData);
+    const updatedUser = await supabaseUserModel.updateUser(req.user.uid, updateData);
+    
+    // Obtener el rol del usuario actualizado
+    let role = 'user';
+    if (updatedUser.id_rol) {
+      if (updatedUser.id_rol === 1) role = 'admin';
+      else if (updatedUser.id_rol === 3) role = 'veterinario';
+    }
     
     res.json({
-      uid: updatedUser.uid,
-      email: updatedUser.email,
-      role: updatedUser.role,
-      phone: updatedUser.phone || '',
+      uid: updatedUser.uid || updatedUser.id_autentificar,
+      email: updatedUser.email || '',
+      role: role,
       primer_nombre: updatedUser.primer_nombre || '',
       segundo_nombre: updatedUser.segundo_nombre || '',
       primer_apellido: updatedUser.primer_apellido || '',
       segundo_apellido: updatedUser.segundo_apellido || '',
-      id_usuario: updatedUser.uid
+      id_usuario: updatedUser.id_usuario
     });
   } catch (error) {
     res.status(500);
@@ -242,7 +282,7 @@ const updateUserProfile = asyncHandler(async (req, res) => {
 
 const getUsers = asyncHandler(async (req, res) => {
   try {
-    const users = await firebaseUserModel.getAllUsers();
+    const users = await supabaseUserModel.getAllUsers();
     res.json(users);
   } catch (error) {
     res.status(500);
@@ -266,7 +306,7 @@ const changeUserRole = asyncHandler(async (req, res) => {
       throw new Error('Rol inválido');
     }
     
-    const updatedUser = await firebaseUserModel.changeUserRole(userId, role);
+    const updatedUser = await supabaseUserModel.changeUserRole(userId, role);
     
     res.json({
       uid: updatedUser.uid,

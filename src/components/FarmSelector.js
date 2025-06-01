@@ -6,8 +6,7 @@ import {
   TouchableOpacity, 
   Modal, 
   FlatList, 
-  ActivityIndicator,
-  Image 
+  ActivityIndicator
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from './AuthContext';
@@ -16,25 +15,36 @@ import { useRouter } from 'expo-router';
 import { colors } from '../styles/commonStyles';
 import { getShadowStyle } from '../utils/styles';
 
-const ALL_FARMS_OPTION = {
-  _id: 'all-farms',
-  name: 'Todas las granjas',
-  isSpecialOption: true
-};
-
 const FarmSelector = ({ onSelectFarm, selectedFarm }) => {
   const { userInfo } = useAuth();
   const router = useRouter();
   const [farms, setFarms] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
   const [error, setError] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
-    if (userInfo?.uid) {
+    console.log('FarmSelector - userInfo actualizado:', 
+      userInfo ? `uid: ${userInfo.uid ? 'Sí' : 'No'}, token: ${userInfo.token ? 'Sí' : 'No'}` : 'No hay userInfo');
+    
+    if (userInfo && userInfo.token) {
+      setLoading(true);
       loadFarms();
+    } else {
+      if (retryCount < 3) {
+        const timer = setTimeout(() => {
+          console.log(`FarmSelector - Reintentando carga (${retryCount + 1}/3)`);
+          setRetryCount(prev => prev + 1);
+        }, 1000);
+        
+        return () => clearTimeout(timer);
+      } else if (retryCount === 3) {
+        setLoading(false);
+        setError('Fallo al cargar granjas');
+      }
     }
-  }, [userInfo]);
+  }, [userInfo, retryCount]);
 
   useEffect(() => {
     if (modalVisible && userInfo?.uid) {
@@ -44,20 +54,31 @@ const FarmSelector = ({ onSelectFarm, selectedFarm }) => {
 
   const loadFarms = async () => {
     try {
-      setLoading(true);
+      if (!loading) setLoading(true);
       setError(null);
       
-      const farmsData = await api.farms.getAll();
+      console.log('FarmSelector - Iniciando carga de granjas para usuario:', userInfo?.uid);
       
-      const farmsWithOptions = [
-        ALL_FARMS_OPTION,
-        ...farmsData || []
-      ];
+      const farmsData = await api.farms.getUserFarms();
       
-      setFarms(farmsWithOptions);
+      console.log('FarmSelector - Granjas recibidas:', farmsData ? farmsData.length : 0);
       
-      if (!selectedFarm && farmsWithOptions.length > 0) {
-        onSelectFarm(farmsWithOptions[0]);
+      if (!farmsData || farmsData.length === 0) {
+        console.log('FarmSelector - No hay granjas, intentando con getAll');
+        const allFarmsData = await api.farms.getAll();
+        setFarms(allFarmsData || []);
+        
+        if (!selectedFarm && allFarmsData && allFarmsData.length > 0) {
+          console.log('FarmSelector - Seleccionando granja por defecto:', allFarmsData[0].name);
+          onSelectFarm(allFarmsData[0]);
+        }
+      } else {
+        setFarms(farmsData);
+        
+        if (!selectedFarm && farmsData.length > 0) {
+          console.log('FarmSelector - Seleccionando granja por defecto:', farmsData[0].name);
+          onSelectFarm(farmsData[0]);
+        }
       }
     } catch (err) {
       console.error('Error loading farms:', err);
@@ -89,15 +110,7 @@ const FarmSelector = ({ onSelectFarm, selectedFarm }) => {
         onPress={() => handleSelectFarm(item)}
       >
         <View style={styles.farmIconContainer}>
-          {item.isSpecialOption ? (
-            item._id === 'all-farms' ? (
-              <Ionicons name="apps" size={24} color={colors.primary} />
-            ) : (
-              <Ionicons name="business" size={24} color={colors.secondary} />
-            )
-          ) : (
-            <Ionicons name="business" size={24} color={colors.secondary} />
-          )}
+          <Ionicons name="business" size={24} color={colors.secondary} />
         </View>
         <View style={styles.farmInfoContainer}>
           <Text style={[
@@ -106,11 +119,8 @@ const FarmSelector = ({ onSelectFarm, selectedFarm }) => {
           ]}>
             {item.name}
           </Text>
-          {item.location && !item.isSpecialOption && (
+          {item.location && (
             <Text style={styles.farmLocation}>{item.location}</Text>
-          )}
-          {item.isSpecialOption && item._id === 'all-farms' && (
-            <Text style={styles.farmDescription}>Mostrar todo el ganado</Text>
           )}
         </View>
         {isSelected && (
@@ -156,14 +166,7 @@ const FarmSelector = ({ onSelectFarm, selectedFarm }) => {
         style={styles.selectorButton}
         onPress={() => setModalVisible(true)}
       >
-        <Ionicons 
-          name={selectedFarm?.isSpecialOption ? 
-            (selectedFarm._id === 'all-farms' ? 'apps' : 'business') : 
-            'business'
-          } 
-          size={18} 
-          color="#ffffff" 
-        />
+        <Ionicons name="business" size={18} color="#ffffff" />
         <Text style={styles.selectorText} numberOfLines={1}>
           {selectedFarm ? selectedFarm.name : 'Seleccionar granja'}
         </Text>
@@ -315,11 +318,6 @@ const styles = StyleSheet.create({
   farmLocation: {
     fontSize: 14,
     color: colors.textLight,
-  },
-  farmDescription: {
-    fontSize: 13,
-    color: colors.textLight,
-    fontStyle: 'italic',
   },
   addFarmButton: {
     flexDirection: 'row',
