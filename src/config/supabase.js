@@ -4,10 +4,9 @@ import { Platform } from 'react-native';
 import 'react-native-url-polyfill/auto';
 
 // Obtener credenciales de Supabase desde variables de entorno
-const supabaseUrl = 'https://eisceuexbwpdpjxuskgz.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpc2NldWV4YndwZHBqeHVza2d6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDg1NTM3MzgsImV4cCI6MjA2NDEyOTczOH0.B-xDkrbShC76GwQ1p4poZzdcppxh1u95s24XRz185KE';
+const supabaseUrl = 'https://ijzvgpmxideftivpzzar.supabase.co';
+const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlqenZncG14aWRlZnRpdnB6emFyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzUwNTg0MzAsImV4cCI6MjA5MDYzNDQzMH0.OTRyKeuPkvqQLoIlcoBh0MxN3KqVOSV1rXIQHI7UdZM';
 
-// Crear diferentes opciones de configuración basadas en la plataforma
 let supabaseOptions = {};
 
 if (Platform.OS === 'web') {
